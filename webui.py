@@ -75,6 +75,24 @@ class JrpcHandler(BaseHTTPRequestHandler):
             return Success("pong")
 
         @method
+        def add_base_node() -> Result:  # type:ignore
+            id = self.commands.base_nodes.add()
+            res = {id: id}
+            return Success(res)
+
+        @method
+        def add_base_wallet() -> Result:  # type:ignore
+            id = self.commands.base_wallets.add()
+            res = {id: id}
+            return Success(res)
+
+        @method
+        def add_asset_wallet() -> Result:
+            id = self.commands.dan_wallets.add()
+            res = {id: id}
+            return Success(res)
+
+        @method
         def base_nodes() -> Result:  # type:ignore
             res = {}
             for id in self.commands.base_nodes:

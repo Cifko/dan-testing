@@ -25,7 +25,7 @@ from Common.config import (
     USE_BINARY_EXECUTABLE,
 )
 from Processes.miner import miner
-from Processes.signaling_server import SignalingServer
+from Processes.signaling_server import signaling_server
 from Stats.stats import stats
 from Processes.tari_connector_sample import TariConnectorSample
 from Processes.template import Template
@@ -149,7 +149,7 @@ def cli_loop():
                     dan_wallets.live()
                     indexers.live()
                 elif command == "tx":
-                    template.call_function(TEMPLATE_FUNCTION[0], dan_wallets.any_dan_wallet_daemon().jrpc_client, FUNCTION_ARGS)
+                    template.call_function(TEMPLATE_FUNCTION[0], dan_wallets.any().jrpc_client, FUNCTION_ARGS)
                     pass
                 elif command.startswith("st"):
                     if command == "st":
@@ -229,8 +229,6 @@ def check_executable(bins_folder: str, file_name: str):
 
 server = None
 tari_connector_sample = None
-signaling_server = None
-signaling_server_jrpc_port = None
 webui_server = None
 commands = None
 
@@ -274,15 +272,14 @@ try:
     server.run()
     if STEPS_RUN_SIGNALLING_SERVER:
         print_step("Starting signalling server")
-        signaling_server = SignalingServer(local_ip)
-        signaling_server_jrpc_port = signaling_server.json_rpc_port
+        signaling_server.start(local_ip)
 
     if STEPS_RUN_TARI_CONNECTOR_TEST_SITE:
         if not STEPS_RUN_SIGNALLING_SERVER:
             print("Starting tari-connector test without signaling server is pointless!")
         else:
             print_step("Starting tari-connector test website")
-            tari_connector_sample = TariConnectorSample(signaling_server_address=f"http://{local_ip}:{signaling_server.json_rpc_port}")
+            tari_connector_sample = TariConnectorSample(signaling_server_address=signaling_server.address)
 
     commands = Commands(tari_connector_sample, server, signaling_server)
 
@@ -332,22 +329,21 @@ try:
 
     print_step("CREATING DAN WALLETS DAEMONS")
 
-    def create_wallet(dwallet_id: int, indexer_jrpc: int, signaling_server_jrpc: Optional[int]):
-        dan_wallets.add_dan_wallet_daemon(dwallet_id, indexer_jrpc, signaling_server_jrpc)
+    def create_wallet(indexer_jrpc: int, signaling_server_jrpc_port: Optional[int]):
+        dan_wallets.add(indexer_jrpc, signaling_server_jrpc_port)
 
-    for dwallet_id in range(SPAWN_WALLETS):
+    for id in range(SPAWN_WALLETS):
         if SPAWN_INDEXERS > 0:
             threads.add(
                 create_wallet,
                 (
-                    dwallet_id,
-                    indexers[dwallet_id % SPAWN_INDEXERS].json_rpc_port,
+                    indexers[id % SPAWN_INDEXERS].json_rpc_port,
                     signaling_server_jrpc_port,
                 ),
             )
 
     threads.wait()
-    print(dan_wallets.dan_wallets.keys())
+    print(dan_wallets.items.keys())
     # Create a new key so we register all VNs to this public key and then create TestAccount_0 for it. So we can claim the fees.
     dan_wallets[0].jrpc_client.auth()
     new_key = dan_wallets[0].jrpc_client.keys_create()
@@ -490,7 +486,7 @@ try:
             template = templates[template_name[0]]
             dump_into_account = "!" in template_name[1]
             method = template_name[1].replace("!", "")
-            template.call_function(method, dan_wallets.any_dan_wallet_daemon().jrpc_client, FUNCTION_ARGS, dump_into_account)
+            template.call_function(method, dan_wallets.any().jrpc_client, FUNCTION_ARGS, dump_into_account)
 
     if STRESS_TEST:
         stress_test()
